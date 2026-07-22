@@ -114,6 +114,24 @@ enum Cmd {
         #[arg(long)]
         to: String,
     },
+    /// The inner loop: compile → pack → deploy → start → logs, one command.
+    /// Points at a wasm32-wasip1 cargo project (or a dir with a prebuilt
+    /// .wasm) and a device; prints per-phase timings. The run input doubles
+    /// as the recorded eval vector, so even inner-loop deploys carry a
+    /// behavioral signature.
+    Run {
+        /// Cargo project dir (Cargo.toml present ⇒ cross-compiled) or a
+        /// payload dir already containing the .wasm
+        project: PathBuf,
+        #[arg(long)]
+        to: String,
+        /// stdin for the run — also recorded as the eval vector
+        #[arg(long, default_value = "")]
+        input: String,
+        /// Pack name (default: the project directory name)
+        #[arg(long)]
+        name: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -130,7 +148,120 @@ fn main() -> Result<()> {
         Cmd::Start { name, to, input } => http_post(&to, &format!("/v1/packs/{name}/start"), input.as_bytes()),
         Cmd::Stop { name, to } => http_post(&to, &format!("/v1/packs/{name}/stop"), &[]),
         Cmd::Logs { name, to } => http_get(&to, &format!("/v1/packs/{name}/logs")),
+        Cmd::Run { project, to, input, name } => run(project, &to, &input, name),
     }
+}
+
+/// `ferrite run` — the sub-5s inner loop. Every phase timed and printed:
+/// honest numbers or it didn't happen.
+fn run(project: PathBuf, to: &str, input: &str, name: Option<String>) -> Result<()> {
+    use std::time::Instant;
+    let t0 = Instant::now();
+    let name = name.unwrap_or_else(|| {
+        project
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "run".into())
+    });
+
+    // Phase 1 — compile (only if this is a cargo project; a plain payload
+    // dir with a .wasm inside is used as-is).
+    let mut wasm_path: Option<PathBuf> = None;
+    if project.join("Cargo.toml").exists() {
+        let status = std::process::Command::new("cargo")
+            .args(["build", "--release", "--target", "wasm32-wasip1"])
+            .current_dir(&project)
+            .status()
+            .context("running cargo")?;
+        if !status.success() {
+            bail!("cargo build failed");
+        }
+        let rel = project.join("target/wasm32-wasip1/release");
+        for e in fs::read_dir(&rel)?.flatten() {
+            if e.path().extension().is_some_and(|x| x == "wasm") {
+                wasm_path = Some(e.path());
+                break;
+            }
+        }
+    } else {
+        for e in fs::read_dir(&project)?.flatten() {
+            if e.path().extension().is_some_and(|x| x == "wasm") {
+                wasm_path = Some(e.path());
+                break;
+            }
+        }
+    }
+    let wasm_path = wasm_path.context("no .wasm found (build output or payload dir)")?;
+    let t_compile = t0.elapsed();
+
+    // Phase 2 — pack: stage the wasm, record the run input as the eval
+    // vector, sign.
+    let t1 = Instant::now();
+    let stage = std::env::temp_dir().join(format!("ferrite-run-{name}"));
+    let _ = fs::remove_dir_all(&stage);
+    fs::create_dir_all(&stage)?;
+    let entry_name = "policy.wasm".to_string();
+    fs::copy(&wasm_path, stage.join(&entry_name))?;
+    let fpack = std::env::temp_dir().join(format!("ferrite-run-{name}.fpack"));
+    build(
+        stage.clone(),
+        name.clone(),
+        "0.0.0-run".into(),
+        entry_name,
+        "wasi-cmd".into(),
+        vec![],
+        vec![],
+        vec![input.to_string()],
+        vec![],
+        None,
+        vec![],
+        Some(fpack.clone()),
+    )?;
+    let t_pack = t1.elapsed();
+
+    // Phase 3 — deploy (device re-verifies signature, digests, behavior).
+    let t2 = Instant::now();
+    deploy(&fpack, to)?;
+    let t_deploy = t2.elapsed();
+
+    // Phase 4 — start + wait for exit, then stream the logs.
+    let t3 = Instant::now();
+    let ag = agent();
+    let mut resp = ag
+        .post(format!("http://{to}/v1/packs/{name}/start"))
+        .send(input.as_bytes())?;
+    if !resp.status().is_success() {
+        bail!("start failed: HTTP {} {}", resp.status(), resp.body_mut().read_to_string().unwrap_or_default());
+    }
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let logs = loop {
+        let mut r = ag.get(format!("http://{to}/v1/packs/{name}/logs")).call()?;
+        let body: serde_json::Value = serde_json::from_str(&r.body_mut().read_to_string()?)?;
+        let state = body["state"].as_str().unwrap_or("");
+        if state != "running" {
+            break body["logs"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>())
+                .unwrap_or_default();
+        }
+        if Instant::now() > deadline {
+            bail!("still running after 60s — use `ferrite logs`/`ferrite stop`");
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    let t_run = t3.elapsed();
+
+    println!("── {name} ──");
+    for l in &logs {
+        println!("{l}");
+    }
+    println!("── timings ──");
+    println!("compile  {:>8.2?}", t_compile);
+    println!("pack     {:>8.2?}", t_pack);
+    println!("deploy   {:>8.2?}", t_deploy);
+    println!("run+logs {:>8.2?}", t_run);
+    println!("TOTAL    {:>8.2?}", t0.elapsed());
+    Ok(())
 }
 
 fn key_path() -> Result<PathBuf> {
