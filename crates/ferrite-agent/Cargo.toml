@@ -1,0 +1,31 @@
+[package]
+name = "ferrite-agent"
+description = "ferrited — the Ferrite device agent: discover, deploy, verify behavior, run"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "ferrited"
+path = "src/main.rs"
+
+[dependencies]
+ferrite-pack.workspace = true
+ferrite-runtime = { path = "../ferrite-runtime", features = ["ferric"] }
+ferrite-bridge = { path = "../ferrite-bridge" }
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net"] }
+mdns-sd = "0.20"
+gethostname = "1"
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+anyhow.workspace = true
+# Real serial output for bridge packs (FERRITE_BRIDGE_DEV=/dev/tty…). Off by
+# default so the agent builds everywhere; without it (or without the env var)
+# bridge bytes go to a byte-exact capture file instead.
+serialport = { version = "4", optional = true }
+
+[features]
+serial = ["dep:serialport"]

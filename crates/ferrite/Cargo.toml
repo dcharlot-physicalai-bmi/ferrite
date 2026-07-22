@@ -1,0 +1,17 @@
+[package]
+name = "ferrite"
+description = "Ferrite CLI — build, sign, verify, and deploy verified-behavior packs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ferrite-pack.workspace = true
+ferrite-runtime = { path = "../ferrite-runtime", features = ["ferric"] }
+clap = { version = "4", features = ["derive"] }
+ureq = "3"
+mdns-sd = "0.20"
+serde_json.workspace = true
+hex.workspace = true
+anyhow.workspace = true

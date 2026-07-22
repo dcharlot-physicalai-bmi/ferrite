@@ -1,0 +1,41 @@
+[workspace]
+resolver = "3"
+members = ["crates/ferrite-pack", "crates/ferrite", "crates/ferrite-agent", "crates/ferrite-runtime", "crates/ferrite-bridge"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/dcharlot-physicalai-bmi/ferrite"
+
+[workspace.dependencies]
+ferrite-pack = { path = "crates/ferrite-pack" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+ed25519-dalek = "3"
+getrandom = "0.4"
+hex = "0.4"
+tar = "0.4"
+thiserror = "2"
+anyhow = "1"
+
+[profile.release]
+lto = "thin"
+strip = true
+
+# The ferric engine's determinism guarantee lives partly in Ferric's wgpu/naga
+# forks (MTLMathModeSafe + FP_CONTRACT OFF on Metal, NoContraction SPIR-V on
+# Vulkan). Patch tables only apply from the build's workspace root, so ferrite
+# must mirror ferric's fork patches — otherwise packs verify against STOCK
+# fast-math wgpu and cross-fabric bit-identity silently breaks.
+[patch.crates-io]
+wgpu = { path = "../ferric/forks/wgpu" }
+wgpu-core = { path = "../ferric/forks/wgpu-core" }
+wgpu-hal = { path = "../ferric/forks/wgpu-hal" }
+wgpu-types = { path = "../ferric/forks/wgpu-types" }
+wgpu-naga-bridge = { path = "../ferric/forks/wgpu-naga-bridge" }
+wgpu-core-deps-apple = { path = "../ferric/forks/wgpu-core-deps-apple" }
+wgpu-core-deps-emscripten = { path = "../ferric/forks/wgpu-core-deps-emscripten" }
+wgpu-core-deps-windows-linux-android = { path = "../ferric/forks/wgpu-core-deps-windows-linux-android" }
+naga = { path = "../ferric/forks/naga" }

@@ -1,0 +1,23 @@
+[package]
+name = "ferrite-runtime"
+description = "Sandboxed wasi-cmd execution + verified-behavior eval for ferrite packs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ferrite-pack.workspace = true
+ferrite-bridge = { path = "../ferrite-bridge" }
+wasmtime = "47"
+wasmtime-wasi = "47"
+hex.workspace = true
+thiserror.workspace = true
+serde_json.workspace = true
+# engine "ferric" — GPU-fabric model verification (sibling checkout of ferric)
+ferric-core = { path = "../../../ferric/crates/ferric-core", optional = true }
+pollster = { version = "1", optional = true }
+serde = { workspace = true, optional = true }
+
+[features]
+ferric = ["dep:ferric-core", "dep:pollster", "dep:serde"]

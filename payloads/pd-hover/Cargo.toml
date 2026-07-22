@@ -1,0 +1,13 @@
+# Demo pack payload — deliberately NOT a member of the ferrite workspace:
+# it builds to wasm32-wasip1 and ships inside a .fpack.
+[package]
+name = "pd-hover"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

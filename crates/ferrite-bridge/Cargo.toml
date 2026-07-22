@@ -1,0 +1,9 @@
+[package]
+name = "ferrite-bridge"
+description = "Wire-protocol codecs + target registry for the sim-to-real hardware bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
