@@ -335,8 +335,8 @@ async fn start(
     let app2 = app.clone();
     let name2 = name.clone();
     tokio::task::spawn_blocking(move || {
-        let is_model = manifest.kind == ferrite_pack::PayloadKind::Model;
-        let outcome: Result<Vec<String>, String> = if is_model {
+        let kind = manifest.kind;
+        let outcome: Result<Vec<String>, String> = if kind == ferrite_pack::PayloadKind::Model {
             // Model pack: run the ferric engine once on this device's fabric.
             ferrite_runtime::engine_output("ferric", &entry, &body, &manifest.requires)
                 .map(|(out, _)| {
@@ -346,6 +346,17 @@ async fn start(
                     ]
                 })
                 .map_err(|e| e.to_string())
+        } else if kind == ferrite_pack::PayloadKind::Native {
+            // Native pack: run the ELF under the OS sandbox (landlock + rlimits).
+            ferrite_runtime::native::run_native(&entry, &body, &manifest.requires, ferrite_runtime::native::DEFAULT_CPU_SECS)
+                .map_err(|e| e.to_string())
+                .map(|out| {
+                    let mut lines: Vec<String> = vec!["out| native (landlock-confined)".into()];
+                    lines.extend(String::from_utf8_lossy(&out.stdout).lines().map(|l| format!("out| {l}")));
+                    lines.extend(String::from_utf8_lossy(&out.stderr).lines().map(|l| format!("err| {l}")));
+                    lines.push("-- exited ok".into());
+                    lines
+                })
         } else {
             ferrite_runtime::run_wasi_cmd_on(&engine, &entry, &body, &manifest.requires, RUN_FUEL)
                 .map_err(|e| e.to_string())

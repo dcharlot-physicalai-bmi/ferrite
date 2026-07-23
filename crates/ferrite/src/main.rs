@@ -346,7 +346,11 @@ fn build(
         fpack: FPACK_VERSION,
         name: name.clone(),
         version: version.clone(),
-        kind: if engine == "ferric" { PayloadKind::Model } else { PayloadKind::Wasm },
+        kind: match engine.as_str() {
+            "ferric" => PayloadKind::Model,
+            "native" => PayloadKind::Native,
+            _ => PayloadKind::Wasm,
+        },
         entry: entry_pack,
         requires,
         files: BTreeMap::new(),

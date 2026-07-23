@@ -14,10 +14,19 @@ wasmtime-wasi = "47"
 hex.workspace = true
 thiserror.workspace = true
 serde_json.workspace = true
+tempfile = "3"
 # engine "ferric" — GPU-fabric model verification (sibling checkout of ferric)
 ferric-core = { path = "../../../ferric/crates/ferric-core", optional = true }
 pollster = { version = "1", optional = true }
 serde = { workspace = true, optional = true }
 
+# Native-payload sandbox — Linux only (landlock + no-new-privs + rlimits).
+# The deps are target-gated so the rest of the workspace still builds on macOS
+# and wasm; the `native` feature just compiles the module (a stub off-Linux).
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = "0.4"
+libc = "0.2"
+
 [features]
 ferric = ["dep:ferric-core", "dep:pollster", "dep:serde"]
+native = []

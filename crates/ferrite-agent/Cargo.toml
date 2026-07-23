@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 ferrite-pack.workspace = true
-ferrite-runtime = { path = "../ferrite-runtime", features = ["ferric"] }
+ferrite-runtime = { path = "../ferrite-runtime", features = ["ferric", "native"] }
 ferrite-bridge = { path = "../ferrite-bridge" }
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net"] }

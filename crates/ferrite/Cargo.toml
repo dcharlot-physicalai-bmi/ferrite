@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 ferrite-pack.workspace = true
-ferrite-runtime = { path = "../ferrite-runtime", features = ["ferric"] }
+ferrite-runtime = { path = "../ferrite-runtime", features = ["ferric", "native"] }
 clap = { version = "4", features = ["derive"] }
 ureq = "3"
 mdns-sd = "0.20"

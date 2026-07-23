@@ -14,6 +14,7 @@ use wasmtime::{Config, Linker, Module, Store};
 
 #[cfg(feature = "ferric")]
 pub mod ferric_engine;
+pub mod native;
 use wasmtime_wasi::p1::WasiP1Ctx;
 use wasmtime_wasi::p2::pipe::{MemoryInputPipe, MemoryOutputPipe};
 use wasmtime_wasi::{WasiCtxBuilder, clocks::{HostMonotonicClock, HostWallClock}};
@@ -187,6 +188,10 @@ pub fn engine_output(
         }
         #[cfg(feature = "ferric")]
         "ferric" => Ok((ferric_engine::run(entry, input)?, 0)),
+        "native" => {
+            let out = native::run_native(entry, input, grants, native::DEFAULT_CPU_SECS)?;
+            Ok((out.stdout, out.fuel_used))
+        }
         other => Err(RuntimeError::Engine(other.to_string())),
     }
 }
