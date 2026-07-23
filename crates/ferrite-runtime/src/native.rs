@@ -11,6 +11,10 @@
 //!     standard runtime dirs (read, for dynamic binaries), and any `fs:<dir>`
 //!     the manifest grants. Network (TCP bind/connect) is denied unless "net"
 //!     is granted. Nothing else on the filesystem exists to the payload.
+//!   • **seccomp** — a deny-list BPF filter (default allow) blocking the
+//!     privilege-escalation / container-escape / kernel-tampering syscalls no
+//!     compute payload needs (ptrace, kexec, module load, mount, bpf, setns,
+//!     keyctl, …); matched calls return EPERM, so benign compute is untouched.
 //!   • **no-new-privileges** — setuid/setgid/caps can never be gained.
 //!   • **rlimits** — CPU seconds, address space, file size, fd count.
 //!   • **cleared environment + scratch cwd**.
@@ -22,9 +26,9 @@
 //! Honest scope: unlike wasm, native execution is NOT made deterministic by
 //! this sandbox — a native payload that reads the clock or RNG can vary, so
 //! its eval vectors verify behavior only to the extent the binary is itself
-//! deterministic. Off Linux the whole path returns an error; syscall-level
-//! seccomp filtering is the next increment (needs per-payload profiling to be
-//! safe to enable).
+//! deterministic. Off Linux the whole path returns an error. The seccomp
+//! layer is a curated deny-list (safe against benign compute); a per-payload
+//! allow-list profile signed into the manifest is a possible future tier.
 
 use crate::{Output, RuntimeError};
 use ferrite_pack::Requires;
@@ -55,10 +59,12 @@ pub fn run_native(
     let scratch = dir.path().join("scratch");
     std::fs::create_dir_all(&scratch).map_err(|e| RuntimeError::Host(format!("scratch dir: {e}")))?;
 
-    // Build the landlock ruleset here, in the parent — this is where the
-    // allocation happens. The child only calls restrict_self().
+    // Build the landlock ruleset AND compile the seccomp BPF here, in the
+    // parent — this is where allocation happens. The child only issues the
+    // two install syscalls (restrict_self + seccomp), no allocation.
     let ruleset = build_ruleset(dir.path(), &scratch, grants)
         .map_err(|e| RuntimeError::Host(format!("landlock: {e}")))?;
+    let bpf = build_seccomp().map_err(|e| RuntimeError::Host(format!("seccomp: {e}")))?;
 
     let mut cmd = Command::new(&exe);
     cmd.stdin(Stdio::piped())
@@ -71,7 +77,7 @@ pub fn run_native(
     let mut ruleset = Some(ruleset);
     unsafe {
         cmd.pre_exec(move || {
-            // no new privileges (also a landlock prerequisite)
+            // no new privileges (prerequisite for both landlock and seccomp)
             if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0 {
                 return Err(std::io::Error::last_os_error());
             }
@@ -79,6 +85,12 @@ pub fn run_native(
             set_rlimit(libc::RLIMIT_FSIZE, 256 << 20);
             set_rlimit(libc::RLIMIT_AS, 4u64 << 30);
             set_rlimit(libc::RLIMIT_NOFILE, 64);
+            // seccomp BEFORE landlock: landlock's restrict_self installs its
+            // own LSM hook, and applying the seccomp filter afterward did not
+            // take effect (observed: blocked syscalls still succeeded). Order
+            // is irrelevant to what each enforces, so install the syscall
+            // filter first, then the filesystem/network restriction.
+            seccompiler::apply_filter(&bpf).map_err(std::io::Error::other)?;
             if let Some(r) = ruleset.take() {
                 r.restrict_self_in_child().map_err(std::io::Error::other)?;
             }
@@ -130,6 +142,61 @@ fn set_rlimit(resource: libc::__rlimit_resource_t, limit: u64) {
     unsafe {
         libc::setrlimit(resource, &rl);
     }
+}
+
+/// Compile the seccomp baseline: a DENY-LIST (default = allow) of syscalls no
+/// compute payload needs and that enable privilege escalation, container
+/// escape, or kernel tampering — the same class Docker/Wendy block by default.
+/// Deny-list, not allow-list, so ordinary compute and I/O are never at risk of
+/// a missing-syscall kill; matched syscalls return EPERM (graceful) rather than
+/// SIGSYS. Compiled to BPF in the parent; only the install syscall runs in the
+/// child.
+#[cfg(all(target_os = "linux", feature = "native"))]
+fn build_seccomp() -> Result<seccompiler::BpfProgram, String> {
+    use seccompiler::{SeccompAction, SeccompFilter};
+    use std::collections::BTreeMap;
+
+    // Syscalls to block. libc::SYS_* are arch-correct numbers.
+    let blocked: &[libc::c_long] = &[
+        libc::SYS_ptrace,            // debug/inject other processes
+        libc::SYS_kexec_load,        // load a new kernel
+        libc::SYS_kexec_file_load,
+        libc::SYS_init_module,       // load kernel modules
+        libc::SYS_finit_module,
+        libc::SYS_delete_module,
+        libc::SYS_mount,             // filesystem topology
+        libc::SYS_umount2,
+        libc::SYS_pivot_root,
+        libc::SYS_chroot,
+        libc::SYS_reboot,
+        libc::SYS_bpf,               // load BPF programs
+        libc::SYS_userfaultfd,       // classic exploitation primitive
+        libc::SYS_process_vm_readv,  // cross-process memory
+        libc::SYS_process_vm_writev,
+        libc::SYS_perf_event_open,
+        libc::SYS_setns,             // namespace entry
+        libc::SYS_unshare,           // namespace creation / escape
+        libc::SYS_add_key,           // kernel keyring
+        libc::SYS_keyctl,
+        libc::SYS_request_key,
+        libc::SYS_acct,
+        libc::SYS_swapon,
+        libc::SYS_swapoff,
+        libc::SYS_syslog,            // kernel ring buffer
+    ];
+    // Empty rule vector ⇒ unconditional match on that syscall.
+    let mut rules: BTreeMap<i64, Vec<seccompiler::SeccompRule>> = BTreeMap::new();
+    for &nr in blocked {
+        rules.insert(nr as i64, vec![]);
+    }
+    let filter = SeccompFilter::new(
+        rules,
+        SeccompAction::Allow,               // default: allow everything else
+        SeccompAction::Errno(libc::EPERM as u32), // blocked ⇒ EPERM
+        std::env::consts::ARCH.try_into().map_err(|_| "unsupported arch".to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    filter.try_into().map_err(|e: seccompiler::BackendError| format!("{e:?}"))
 }
 
 /// A landlock ruleset created (rules added) in the parent; `restrict_self` is

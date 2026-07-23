@@ -26,6 +26,7 @@ serde = { workspace = true, optional = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 landlock = "0.4"
 libc = "0.2"
+seccompiler = "0.5"
 
 [features]
 ferric = ["dep:ferric-core", "dep:pollster", "dep:serde"]
