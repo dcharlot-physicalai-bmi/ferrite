@@ -5,6 +5,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+keywords = ["edge", "deploy", "signing", "wasm", "robotics"]
+categories = ["embedded", "cryptography"]
 
 [dependencies]
 serde.workspace = true

@@ -922,15 +922,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferric-core"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "flume",
- "wgpu",
-]
-
-[[package]]
 name = "ferralloy"
 version = "0.1.0"
 dependencies = [
@@ -999,9 +990,9 @@ dependencies = [
 name = "ferralloy-runtime"
 version = "0.1.0"
 dependencies = [
- "ferric-core",
  "ferralloy-bridge",
  "ferralloy-pack",
+ "ferric-core",
  "hex",
  "landlock",
  "libc",
@@ -1013,6 +1004,15 @@ dependencies = [
  "thiserror 2.0.19",
  "wasmtime",
  "wasmtime-wasi",
+]
+
+[[package]]
+name = "ferric-core"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "flume",
+ "wgpu",
 ]
 
 [[package]]
