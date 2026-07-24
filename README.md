@@ -23,19 +23,28 @@ deployed to an x86_64 Linux box; the device independently verified all vectors
 **bit-exact across architectures**.
 
 
-## On crates.io
+## Install from crates.io
 
-The two standalone crates are published — no clone needed:
+The whole stack is published — no clone needed:
 
 ```
-cargo add ferralloy-pack     # the signed, verified-behavior pack format
-cargo add ferralloy-bridge   # 12 wire codecs x 17 hardware targets, zero-dep
+cargo install ferralloy         # the CLI (keygen, build, sign, deploy, verify, run, release)
+cargo install ferralloy-agent   # ferralloyd — the device agent
+cargo install ferralloy-fleet   # the open fleet server
 ```
 
-The rest of the stack (runtime, agent `ferralloyd`, CLI `ferralloy`, fleet) is
-usable today via `git clone` + `cargo build`. Publishing those to crates.io is
-gated on republishing the Ferric determinism core, which currently depends on
-patched `wgpu`/`naga` forks not yet on the registry.
+Library crates:
+
+```
+cargo add ferralloy-pack        # the signed, verified-behavior pack format
+cargo add ferralloy-bridge      # 12 wire codecs x 17 hardware targets, zero-dep
+cargo add ferralloy-runtime     # sandboxed execution + verified-behavior eval
+```
+
+The GPU cross-fabric `ferric` engine builds against the published `ferric-core`
+on **stock wgpu** — no toolchain forks. Cross-fabric bit-identity comes from the
+WGSL kernels themselves (proven Metal = Vulkan = browser on unpatched wgpu), so
+`cargo install ferralloy` is deterministic out of the box.
 
 
 ## How
