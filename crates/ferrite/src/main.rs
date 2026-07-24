@@ -132,6 +132,21 @@ enum Cmd {
         #[arg(long)]
         name: Option<String>,
     },
+    /// Publish a signed pack to a fleet channel (operator action). The fleet
+    /// server statically verifies it before it becomes the channel target;
+    /// subscribed devices then pull it and verify its behavior on-device.
+    Release {
+        fpack: PathBuf,
+        #[arg(long, default_value = "stable")]
+        channel: String,
+        #[arg(long)]
+        fleet: String,
+    },
+    /// Show a fleet server's channels and device fleet as JSON.
+    Fleet {
+        #[arg(long)]
+        fleet: String,
+    },
 }
 
 fn main() -> Result<()> {
@@ -149,7 +164,30 @@ fn main() -> Result<()> {
         Cmd::Stop { name, to } => http_post(&to, &format!("/v1/packs/{name}/stop"), &[]),
         Cmd::Logs { name, to } => http_get(&to, &format!("/v1/packs/{name}/logs")),
         Cmd::Run { project, to, input, name } => run(project, &to, &input, name),
+        Cmd::Release { fpack, channel, fleet } => release(&fpack, &channel, &fleet),
+        Cmd::Fleet { fleet } => http_get_abs(&format!("{}/v1/fleet", fleet.trim_end_matches('/'))),
     }
+}
+
+/// `ferrite release` — publish a signed pack to a fleet channel. Verifies it
+/// locally first (fail here, not on the server), then PUTs the bytes.
+fn release(fpack: &PathBuf, channel: &str, fleet: &str) -> Result<()> {
+    let pack = ferrite_pack::load(fpack)?;
+    ferrite_pack::verify(&pack)?;
+    let bytes = fs::read(fpack)?;
+    let fleet = fleet.trim_end_matches('/');
+    println!("releasing {} v{} → {fleet} channel={channel}", pack.manifest.name, pack.manifest.version);
+    let mut resp = agent()
+        .put(format!("{fleet}/v1/channels/{channel}"))
+        .content_type("application/vnd.ferrite.fpack")
+        .send(&bytes[..])?;
+    let status = resp.status();
+    let body = resp.body_mut().read_to_string()?;
+    print_report(&body);
+    if !status.is_success() {
+        bail!("fleet rejected the release (HTTP {status})");
+    }
+    Ok(())
 }
 
 /// `ferrite run` — the sub-5s inner loop. Every phase timed and printed:
@@ -467,7 +505,12 @@ fn print_report(body: &str) {
 }
 
 fn http_get(to: &str, path: &str) -> Result<()> {
-    let mut resp = agent().get(format!("http://{to}{path}")).call()?;
+    http_get_abs(&format!("http://{to}{path}"))
+}
+
+/// GET a fully-qualified URL (fleet endpoints carry their own scheme/host).
+fn http_get_abs(url: &str) -> Result<()> {
+    let mut resp = agent().get(url).call()?;
     let status = resp.status();
     let body = resp.body_mut().read_to_string()?;
     print_report(&body);

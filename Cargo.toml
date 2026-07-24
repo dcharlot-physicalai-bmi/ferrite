@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/ferrite-pack", "crates/ferrite", "crates/ferrite-agent", "crates/ferrite-runtime", "crates/ferrite-bridge"]
+members = ["crates/ferrite-pack", "crates/ferrite", "crates/ferrite-agent", "crates/ferrite-runtime", "crates/ferrite-bridge", "crates/ferrite-fleet"]
 
 [workspace.package]
 version = "0.1.0"

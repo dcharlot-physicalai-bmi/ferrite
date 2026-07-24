@@ -114,6 +114,18 @@ async fn main() -> anyhow::Result<()> {
     .enable_addr_auto();
     mdns.register(service)?;
 
+    // Optional fleet subscription: poll a fleet server for this channel's
+    // target release, pull + run the accept gate + report. The device pulls;
+    // the fleet server never pushes — a device behind NAT still updates, and a
+    // pack still only goes live if its behavior verifies on THIS device.
+    if let Ok(fleet) = std::env::var("FERRITE_FLEET_URL") {
+        let channel = std::env::var("FERRITE_CHANNEL").unwrap_or_else(|_| "stable".into());
+        let device_id = std::env::var("FERRITE_DEVICE_ID").unwrap_or_else(|_| host.clone());
+        println!("fleet: subscribing to {fleet} channel={channel} as {device_id}");
+        let app_fleet = app.clone();
+        std::thread::spawn(move || fleet_poll_loop(app_fleet, fleet, channel, device_id));
+    }
+
     let router = axum::Router::new()
         .route("/", get(ops_page))
         .route("/v1/info", get(info))
@@ -191,6 +203,21 @@ async fn deploy(State(app): State<App>, body: axum::body::Bytes) -> Response {
 }
 
 fn deploy_blocking(app: App, body: axum::body::Bytes) -> Response {
+    let report = accept_pack(&app, &body);
+    let code = if report.error.is_none() {
+        StatusCode::OK
+    } else {
+        StatusCode::BAD_REQUEST
+    };
+    (code, Json(report)).into_response()
+}
+
+/// The accept gate — the heart of Ferrite, shared by the HTTP deploy endpoint
+/// and the fleet-subscription poller. Runs signature → digests → signer policy
+/// → staged behavioral verification, and on full success swaps the pack live
+/// atomically. Returns a report; `error` is `Some` on any rejection and the
+/// pack never goes live in that case.
+fn accept_pack(app: &App, body: &[u8]) -> DeployReport {
     let mut report = DeployReport {
         name: String::new(),
         version: String::new(),
@@ -203,12 +230,12 @@ fn deploy_blocking(app: App, body: axum::body::Bytes) -> Response {
     };
     let reject = |mut r: DeployReport, msg: String| {
         r.error = Some(msg);
-        (StatusCode::BAD_REQUEST, Json(r)).into_response()
+        r
     };
 
     // 1) Parse + static verification (signature, digests, file-set equality).
     let tmp = app.root.join("incoming.fpack");
-    if let Err(e) = fs::write(&tmp, &body) {
+    if let Err(e) = fs::write(&tmp, body) {
         return reject(report, format!("io: {e}"));
     }
     let pack: LoadedPack = match ferrite_pack::load(&tmp) {
@@ -302,7 +329,7 @@ fn deploy_blocking(app: App, body: axum::body::Bytes) -> Response {
             engine: None,
         },
     );
-    (StatusCode::OK, Json(report)).into_response()
+    report
 }
 
 async fn start(
@@ -551,4 +578,102 @@ async fn logs(State(app): State<App>, AxPath(name): AxPath<String>) -> Response 
         return (StatusCode::NOT_FOUND, "no such pack").into_response();
     };
     Json(serde_json::json!({"name": name, "state": p.run, "logs": p.logs})).into_response()
+}
+
+// ─────────────────────────── fleet subscription ───────────────────────────
+
+fn fleet_agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .timeout_global(Some(std::time::Duration::from_secs(120)))
+        .build()
+        .into()
+}
+
+/// Poll the fleet server forever: fetch the channel's target, and if it's new,
+/// pull the pack and run it through the same accept gate as a manual deploy.
+/// Only a behaviorally-verified pack goes live; the result is reported back.
+fn fleet_poll_loop(app: App, fleet: String, channel: String, device_id: String) {
+    let agent = fleet_agent();
+    let mut applied_sha = String::new();
+    loop {
+        if let Err(e) = fleet_tick(&app, &agent, &fleet, &channel, &device_id, &mut applied_sha) {
+            eprintln!("fleet tick: {e}");
+        }
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    }
+}
+
+fn fleet_tick(
+    app: &App,
+    agent: &ureq::Agent,
+    fleet: &str,
+    channel: &str,
+    device_id: &str,
+    applied_sha: &mut String,
+) -> Result<(), String> {
+    // 1) what should this channel be running?
+    let mut resp = agent
+        .get(format!("{fleet}/v1/channels/{channel}"))
+        .call()
+        .map_err(|e| e.to_string())?;
+    if resp.status() == 404 {
+        report_state(agent, fleet, device_id, channel, "", "idle", "no target", true);
+        return Ok(());
+    }
+    let body = resp.body_mut().read_to_string().map_err(|e| e.to_string())?;
+    let target: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    let want_sha = target["sha256"].as_str().unwrap_or_default().to_string();
+    let want_ver = target["version"].as_str().unwrap_or_default().to_string();
+
+    // 2) already on it? just heartbeat.
+    if want_sha == *applied_sha && !want_sha.is_empty() {
+        report_state(agent, fleet, device_id, channel, &want_sha, &want_ver, "up-to-date", true);
+        return Ok(());
+    }
+
+    // 3) pull the pack, integrity-check the transfer, run the accept gate.
+    let pack_bytes = agent
+        .get(format!("{fleet}/v1/channels/{channel}/pack"))
+        .call()
+        .map_err(|e| e.to_string())?
+        .body_mut()
+        .read_to_vec()
+        .map_err(|e| e.to_string())?;
+    if !want_sha.is_empty() && ferrite_pack::sha256_hex(&pack_bytes) != want_sha {
+        return Err("pulled pack sha256 != channel target".into());
+    }
+    let report = accept_pack(app, &pack_bytes);
+    let ok = report.error.is_none();
+    if ok {
+        *applied_sha = want_sha.clone();
+    }
+    let behavior = report.error.clone().unwrap_or_else(|| report.behavior.clone());
+    println!("fleet: channel={channel} → {} {} · {}", report.name, report.version, behavior);
+    report_state(agent, fleet, device_id, channel, &want_sha, &report.version, &behavior, ok);
+    Ok(())
+}
+
+fn report_state(
+    agent: &ureq::Agent,
+    fleet: &str,
+    device_id: &str,
+    channel: &str,
+    target_sha: &str,
+    version: &str,
+    behavior: &str,
+    ok: bool,
+) {
+    let body = serde_json::json!({
+        "device": device_id,
+        "channel": channel,
+        "target_sha": target_sha,
+        "version": version,
+        "behavior": behavior,
+        "ok": ok,
+        "platform": format!("{}/{}", std::env::consts::OS, std::env::consts::ARCH),
+    });
+    let _ = agent
+        .post(format!("{fleet}/v1/devices/{device_id}/report"))
+        .send_json(&body);
 }
