@@ -22,6 +22,22 @@ Proven 2026-07-22 (v0.1, first day): a pack built + vectored on an aarch64 Mac
 deployed to an x86_64 Linux box; the device independently verified all vectors
 **bit-exact across architectures**.
 
+
+## On crates.io
+
+The two standalone crates are published — no clone needed:
+
+```
+cargo add ferralloy-pack     # the signed, verified-behavior pack format
+cargo add ferralloy-bridge   # 12 wire codecs x 17 hardware targets, zero-dep
+```
+
+The rest of the stack (runtime, agent `ferralloyd`, CLI `ferralloy`, fleet) is
+usable today via `git clone` + `cargo build`. Publishing those to crates.io is
+gated on republishing the Ferric determinism core, which currently depends on
+patched `wgpu`/`naga` forks not yet on the registry.
+
+
 ## How
 
 - **`ferralloy-pack`** — the `.fpack` format: deterministic tar (bit-identical

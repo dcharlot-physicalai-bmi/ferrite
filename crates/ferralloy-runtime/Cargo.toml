@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 ferralloy-pack.workspace = true
-ferralloy-bridge = { path = "../ferralloy-bridge" }
+ferralloy-bridge = { path = "../ferralloy-bridge", version = "0.1" }
 wasmtime = "47"
 wasmtime-wasi = "47"
 hex.workspace = true
