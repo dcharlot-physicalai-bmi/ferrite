@@ -2,8 +2,8 @@
 //! toolchain needed. The module reads stdin, adds 1 to every byte, writes the
 //! result to stdout: a deterministic transform with observable behavior.
 
-use ferrite_pack::{EvalSpec, EvalVector, FPACK_VERSION, Manifest, PayloadKind, Requires, sha256_hex};
-use ferrite_runtime::{EVAL_FUEL, check_eval, record_eval, run_wasi_cmd};
+use ferralloy_pack::{EvalSpec, EvalVector, FPACK_VERSION, Manifest, PayloadKind, Requires, sha256_hex};
+use ferralloy_runtime::{EVAL_FUEL, check_eval, record_eval, run_wasi_cmd};
 use std::collections::BTreeMap;
 
 const ECHO_PLUS_ONE: &str = r#"

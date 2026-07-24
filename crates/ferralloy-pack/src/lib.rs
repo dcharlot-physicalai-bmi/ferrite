@@ -1,4 +1,4 @@
-//! ferrite-pack — the signed, verified-behavior artifact format.
+//! ferralloy-pack — the signed, verified-behavior artifact format.
 //!
 //! A `.fpack` is a deterministic tar containing:
 //!   manifest.json   — name/version/kind/entry, capability grants, sha256 of

@@ -1,4 +1,4 @@
-//! ferrite-runtime — sandboxed execution of pack payloads + the verified-behavior check.
+//! ferralloy-runtime — sandboxed execution of pack payloads + the verified-behavior check.
 //!
 //! v0.1 engine: `wasi-cmd`. The entry is a wasm32-wasip1 command module run under
 //! wasmtime with a deny-by-default WASI context: stdin/stdout are in-memory
@@ -8,7 +8,7 @@
 //! vectors from a smoke test into a *behavioral signature*: same pack, same
 //! input, same bytes out — on any device, any fabric.
 
-use ferrite_pack::{EvalVector, Manifest, Requires, sha256_hex};
+use ferralloy_pack::{EvalVector, Manifest, Requires, sha256_hex};
 pub use wasmtime::Engine;
 use wasmtime::{Config, Linker, Module, Store};
 
@@ -200,7 +200,7 @@ pub fn engine_output(
 /// array of normalized actuator targets (each 0..1); encode it into the named
 /// bridge target's wire bytes. Those bytes ARE the pack's behavior — what the
 /// eval vectors digest, what the author signs, and what the bus will carry.
-pub fn bridge_encode(spec: &ferrite_pack::BridgeSpec, stdout: &[u8]) -> Result<Vec<u8>, RuntimeError> {
+pub fn bridge_encode(spec: &ferralloy_pack::BridgeSpec, stdout: &[u8]) -> Result<Vec<u8>, RuntimeError> {
     let targets: Vec<f64> = serde_json::from_slice(stdout)
         .map_err(|e| RuntimeError::Bridge(format!("payload stdout is not a JSON number array: {e}")))?;
     if targets.iter().any(|t| !t.is_finite()) {
@@ -208,13 +208,13 @@ pub fn bridge_encode(spec: &ferrite_pack::BridgeSpec, stdout: &[u8]) -> Result<V
     }
     // A target id ("feetech") resolves through the registry to its codec; a bare
     // codec id ("feetech-scs") is accepted directly.
-    let codec_id = match ferrite_bridge::target(&spec.target) {
+    let codec_id = match ferralloy_bridge::target(&spec.target) {
         Some(t) => t.codec,
         None => &spec.target,
     };
-    let codec = ferrite_bridge::codec(codec_id)
+    let codec = ferralloy_bridge::codec(codec_id)
         .ok_or_else(|| RuntimeError::Bridge(format!("unknown bridge target/codec {:?}", spec.target)))?;
-    let mut cmd = ferrite_bridge::Cmd::new(targets);
+    let mut cmd = ferralloy_bridge::Cmd::new(targets);
     cmd.ids = spec.ids.clone();
     cmd.names = spec.names.clone();
     cmd.topic = spec.topic.clone();
@@ -228,7 +228,7 @@ fn behavior_output(
     entry: &[u8],
     input: &[u8],
     grants: &Requires,
-    bridge: Option<&ferrite_pack::BridgeSpec>,
+    bridge: Option<&ferralloy_pack::BridgeSpec>,
 ) -> Result<(Vec<u8>, u64), RuntimeError> {
     let (out, fuel) = engine_output(engine, entry, input, grants)?;
     match bridge {
@@ -268,7 +268,7 @@ pub fn record_eval(
     entry: &[u8],
     inputs: &[Vec<u8>],
     grants: &Requires,
-    bridge: Option<&ferrite_pack::BridgeSpec>,
+    bridge: Option<&ferralloy_pack::BridgeSpec>,
 ) -> Result<Vec<EvalVector>, RuntimeError> {
     let mut vectors = Vec::with_capacity(inputs.len());
     for input in inputs {

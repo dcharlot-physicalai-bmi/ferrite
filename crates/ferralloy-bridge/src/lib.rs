@@ -1,4 +1,4 @@
-//! ferrite-bridge — wire-protocol codecs for the sim-to-real hardware bridge.
+//! ferralloy-bridge — wire-protocol codecs for the sim-to-real hardware bridge.
 //!
 //! A byte-faithful Rust port of the codec + target layers of the Forge
 //! hwbridge (`v2/public/assets/islands/lib/hwbridge.js`). A TARGET picks a

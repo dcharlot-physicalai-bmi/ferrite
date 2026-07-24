@@ -1,19 +1,19 @@
 [package]
-name = "ferrite-agent"
-description = "ferrited — the Ferrite device agent: discover, deploy, verify behavior, run"
+name = "ferralloy-agent"
+description = "ferralloyd — the Ferralloy device agent: discover, deploy, verify behavior, run"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "ferrited"
+name = "ferralloyd"
 path = "src/main.rs"
 
 [dependencies]
-ferrite-pack.workspace = true
-ferrite-runtime = { path = "../ferrite-runtime", features = ["ferric", "native"] }
-ferrite-bridge = { path = "../ferrite-bridge" }
+ferralloy-pack.workspace = true
+ferralloy-runtime = { path = "../ferralloy-runtime", features = ["ferric", "native"] }
+ferralloy-bridge = { path = "../ferralloy-bridge" }
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net"] }
 mdns-sd = "0.20"
@@ -23,7 +23,7 @@ serde.workspace = true
 serde_json.workspace = true
 hex.workspace = true
 anyhow.workspace = true
-# Real serial output for bridge packs (FERRITE_BRIDGE_DEV=/dev/tty…). Off by
+# Real serial output for bridge packs (FERRALLOY_BRIDGE_DEV=/dev/tty…). Off by
 # default so the agent builds everywhere; without it (or without the env var)
 # bridge bytes go to a byte-exact capture file instead.
 serialport = { version = "4", optional = true }

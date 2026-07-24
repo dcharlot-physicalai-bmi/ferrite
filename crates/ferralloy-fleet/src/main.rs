@@ -1,7 +1,7 @@
-//! ferrite-fleet — the open, self-hostable fleet plane.
+//! ferralloy-fleet — the open, self-hostable fleet plane.
 //!
 //! Every serious edge platform ships an open device agent and gates the fleet
-//! server behind a paid cloud. Ferrite's fleet plane is open too, with no
+//! server behind a paid cloud. Ferralloy's fleet plane is open too, with no
 //! feature gate — that is the whole point. It is deliberately small:
 //!
 //!   • **channels** (stable, beta, …) each hold one current **release** — a
@@ -76,16 +76,16 @@ fn now() -> u64 {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let port: u16 = std::env::var("FERRITE_FLEET_PORT")
+    let port: u16 = std::env::var("FERRALLOY_FLEET_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(7280);
-    let root = std::env::var("FERRITE_FLEET_ROOT")
+    let root = std::env::var("FERRALLOY_FLEET_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
             std::env::home_dir()
                 .expect("no home")
-                .join(".ferrite")
+                .join(".ferralloy")
                 .join("fleet")
         });
     fs::create_dir_all(root.join("channels"))?;
@@ -113,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024));
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
-    println!("ferrite-fleet listening on 0.0.0.0:{port}");
+    println!("ferralloy-fleet listening on 0.0.0.0:{port}");
     axum::serve(listener, router).await?;
     Ok(())
 }
@@ -140,18 +140,18 @@ async fn set_channel(State(app): State<App>, Path(ch): Path<String>, body: axum:
     if let Err(e) = fs::write(&tmp, &body) {
         return (StatusCode::INTERNAL_SERVER_ERROR, format!("io: {e}")).into_response();
     }
-    let pack = match ferrite_pack::load(&tmp) {
+    let pack = match ferralloy_pack::load(&tmp) {
         Ok(p) => p,
         Err(e) => return (StatusCode::BAD_REQUEST, format!("load: {e}")).into_response(),
     };
-    let signer = match ferrite_pack::verify(&pack) {
+    let signer = match ferralloy_pack::verify(&pack) {
         Ok(s) => s,
         Err(e) => return (StatusCode::BAD_REQUEST, format!("verification failed: {e}")).into_response(),
     };
     let rel = Release {
         name: pack.manifest.name.clone(),
         version: pack.manifest.version.clone(),
-        sha256: ferrite_pack::sha256_hex(&body),
+        sha256: ferralloy_pack::sha256_hex(&body),
         signer,
         published: now(),
     };
@@ -180,7 +180,7 @@ async fn get_pack(State(app): State<App>, Path(ch): Path<String>) -> Response {
     let path = app.root.join("channels").join(format!("{ch}.fpack"));
     match fs::read(&path) {
         Ok(bytes) => (
-            [(axum::http::header::CONTENT_TYPE, "application/vnd.ferrite.fpack")],
+            [(axum::http::header::CONTENT_TYPE, "application/vnd.ferralloy.fpack")],
             bytes,
         )
             .into_response(),
@@ -213,7 +213,7 @@ async fn dashboard(State(app): State<App>) -> Html<String> {
         ));
     }
     if chan_rows.is_empty() {
-        chan_rows = "<tr><td colspan=5 class=dim>no channels yet — <span class=m>ferrite release &lt;pack&gt; --channel stable --fleet …</span></td></tr>".into();
+        chan_rows = "<tr><td colspan=5 class=dim>no channels yet — <span class=m>ferralloy release &lt;pack&gt; --channel stable --fleet …</span></td></tr>".into();
     }
     let mut dev_rows = String::new();
     for (id, d) in &st.devices {
@@ -225,10 +225,10 @@ async fn dashboard(State(app): State<App>) -> Html<String> {
         ));
     }
     if dev_rows.is_empty() {
-        dev_rows = "<tr><td colspan=6 class=dim>no devices reporting — start ferrited with FERRITE_FLEET_URL set</td></tr>".into();
+        dev_rows = "<tr><td colspan=6 class=dim>no devices reporting — start ferralloyd with FERRALLOY_FLEET_URL set</td></tr>".into();
     }
     Html(format!(
-        r#"<!doctype html><meta charset=utf-8><title>Ferrite Fleet</title>
+        r#"<!doctype html><meta charset=utf-8><title>Ferralloy Fleet</title>
 <style>
  body{{font:14px ui-monospace,Menlo,monospace;background:#0b1024;color:#eef1f8;margin:0;padding:28px 34px}}
  h1{{font-size:17px;letter-spacing:.02em;margin:0 0 2px}} h1 b{{color:#cfaa5b}}
@@ -238,7 +238,7 @@ async fn dashboard(State(app): State<App>) -> Html<String> {
  th{{color:#8aa0bd;font-size:10px;letter-spacing:.1em;text-transform:uppercase}}
  .m{{color:#9fb2cc}} .dim{{color:#61708a}} .ok{{color:#46c6b0}} .bad{{color:#ff6a6a}}
 </style>
-<h1><b>Φ</b> Ferrite Fleet</h1>
+<h1><b>Φ</b> Ferralloy Fleet</h1>
 <p class=sub>Open fleet plane · a device shows here only after it VERIFIES a release's behavior on-device. Rolled out = verified, not delivered.</p>
 <h2>Channels</h2>
 <table><tr><th>channel</th><th>pack</th><th>version</th><th>sha256</th><th>signer</th></tr>{chan_rows}</table>

@@ -31,7 +31,7 @@
 //! allow-list profile signed into the manifest is a possible future tier.
 
 use crate::{Output, RuntimeError};
-use ferrite_pack::Requires;
+use ferralloy_pack::Requires;
 
 /// Default CPU-seconds ceiling for one native eval/run.
 pub const DEFAULT_CPU_SECS: u64 = 30;
@@ -49,7 +49,7 @@ pub fn run_native(
     use std::process::{Command, Stdio};
 
     let dir = tempfile::Builder::new()
-        .prefix("ferrite-native-")
+        .prefix("ferralloy-native-")
         .tempdir()
         .map_err(|e| RuntimeError::Host(format!("scratch: {e}")))?;
     let exe = dir.path().join("payload");

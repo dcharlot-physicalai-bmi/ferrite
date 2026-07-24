@@ -1,15 +1,15 @@
 [workspace]
 resolver = "3"
-members = ["crates/ferrite-pack", "crates/ferrite", "crates/ferrite-agent", "crates/ferrite-runtime", "crates/ferrite-bridge", "crates/ferrite-fleet"]
+members = ["crates/ferralloy-pack", "crates/ferralloy", "crates/ferralloy-agent", "crates/ferralloy-runtime", "crates/ferralloy-bridge", "crates/ferralloy-fleet"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/dcharlot-physicalai-bmi/ferrite"
+repository = "https://github.com/dcharlot-physicalai-bmi/ferralloy"
 
 [workspace.dependencies]
-ferrite-pack = { path = "crates/ferrite-pack" }
+ferralloy-pack = { path = "crates/ferralloy-pack" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
@@ -26,7 +26,7 @@ strip = true
 
 # The ferric engine's determinism guarantee lives partly in Ferric's wgpu/naga
 # forks (MTLMathModeSafe + FP_CONTRACT OFF on Metal, NoContraction SPIR-V on
-# Vulkan). Patch tables only apply from the build's workspace root, so ferrite
+# Vulkan). Patch tables only apply from the build's workspace root, so ferralloy
 # must mirror ferric's fork patches — otherwise packs verify against STOCK
 # fast-math wgpu and cross-fabric bit-identity silently breaks.
 [patch.crates-io]

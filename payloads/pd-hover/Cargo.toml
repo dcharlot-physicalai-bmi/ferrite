@@ -1,4 +1,4 @@
-# Demo pack payload — deliberately NOT a member of the ferrite workspace:
+# Demo pack payload — deliberately NOT a member of the ferralloy workspace:
 # it builds to wasm32-wasip1 and ships inside a .fpack.
 [package]
 name = "pd-hover"

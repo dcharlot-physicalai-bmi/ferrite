@@ -1,6 +1,6 @@
 /target
 payloads/*/target
 *.fpack
-ferrited.log
+ferralloyd.log
 node_modules
 .DS_Store

@@ -1,5 +1,5 @@
 [package]
-name = "ferrite-bridge"
+name = "ferralloy-bridge"
 description = "Wire-protocol codecs + target registry for the sim-to-real hardware bridge"
 version.workspace = true
 edition.workspace = true

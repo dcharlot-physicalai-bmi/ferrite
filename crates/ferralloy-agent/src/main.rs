@@ -1,4 +1,4 @@
-//! ferrited — the Ferrite device agent.
+//! ferralloyd — the Ferralloy device agent.
 //!
 //! What makes this agent different from every fleet agent in the field: a pack
 //! is accepted only if its **behavior** verifies, not just its bytes. On
@@ -8,7 +8,7 @@
 //! deny-by-default sandbox the pack will run in, byte-comparing output digests.
 //! Only then does the pack go live — atomically.
 //!
-//! Signer policy: if ~/.ferrite/agent/allowed_signers exists (one pubkey hex
+//! Signer policy: if ~/.ferralloy/agent/allowed_signers exists (one pubkey hex
 //! per line) it is enforced; otherwise the agent runs trust-on-first-use and
 //! reports the signer so the operator can pin it.
 
@@ -16,14 +16,14 @@ use axum::extract::{Path as AxPath, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
-use ferrite_pack::{LoadedPack, Manifest};
+use ferralloy_pack::{LoadedPack, Manifest};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-const SERVICE_TYPE: &str = "_ferrite._tcp.local.";
+const SERVICE_TYPE: &str = "_ferralloy._tcp.local.";
 const DEFAULT_PORT: u16 = 7266;
 const RUN_FUEL: u64 = u64::MAX / 2; // effectively unbounded for `start`; eval runs use EVAL_FUEL
 
@@ -43,7 +43,7 @@ struct PackState {
     dir: PathBuf,
     run: RunState,
     logs: Vec<String>,
-    engine: Option<ferrite_runtime::Engine>,
+    engine: Option<ferralloy_runtime::Engine>,
 }
 
 #[derive(Clone, Serialize, PartialEq)]
@@ -80,13 +80,13 @@ struct DeployReport {
 fn agent_root() -> PathBuf {
     std::env::home_dir()
         .expect("no home directory")
-        .join(".ferrite")
+        .join(".ferralloy")
         .join("agent")
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let port: u16 = std::env::var("FERRITE_PORT")
+    let port: u16 = std::env::var("FERRALLOY_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(DEFAULT_PORT);
@@ -99,7 +99,7 @@ async fn main() -> anyhow::Result<()> {
     };
     reload_packs(&app);
 
-    // mDNS advertisement — `ferrite discover` finds us with zero config.
+    // mDNS advertisement — `ferralloy discover` finds us with zero config.
     let host = gethostname::gethostname().to_string_lossy().into_owned();
     let mdns = mdns_sd::ServiceDaemon::new()?;
     let props = [("platform", format!("{}/{}", std::env::consts::OS, std::env::consts::ARCH))];
@@ -118,9 +118,9 @@ async fn main() -> anyhow::Result<()> {
     // target release, pull + run the accept gate + report. The device pulls;
     // the fleet server never pushes — a device behind NAT still updates, and a
     // pack still only goes live if its behavior verifies on THIS device.
-    if let Ok(fleet) = std::env::var("FERRITE_FLEET_URL") {
-        let channel = std::env::var("FERRITE_CHANNEL").unwrap_or_else(|_| "stable".into());
-        let device_id = std::env::var("FERRITE_DEVICE_ID").unwrap_or_else(|_| host.clone());
+    if let Ok(fleet) = std::env::var("FERRALLOY_FLEET_URL") {
+        let channel = std::env::var("FERRALLOY_CHANNEL").unwrap_or_else(|_| "stable".into());
+        let device_id = std::env::var("FERRALLOY_DEVICE_ID").unwrap_or_else(|_| host.clone());
         println!("fleet: subscribing to {fleet} channel={channel} as {device_id}");
         let app_fleet = app.clone();
         std::thread::spawn(move || fleet_poll_loop(app_fleet, fleet, channel, device_id));
@@ -138,7 +138,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024));
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
-    println!("ferrited listening on 0.0.0.0:{port} ({host})");
+    println!("ferralloyd listening on 0.0.0.0:{port} ({host})");
     axum::serve(listener, router).await?;
     Ok(())
 }
@@ -163,7 +163,7 @@ fn reload_packs(app: &App) {
 /// The GPU fabric this device verifies model packs on — resolved once.
 fn fabric() -> &'static str {
     static FABRIC: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    FABRIC.get_or_init(ferrite_runtime::ferric_engine::fabric)
+    FABRIC.get_or_init(ferralloy_runtime::ferric_engine::fabric)
 }
 
 async fn info(State(app): State<App>) -> Json<serde_json::Value> {
@@ -184,7 +184,7 @@ async fn info(State(app): State<App>) -> Json<serde_json::Value> {
         })
         .collect();
     Json(serde_json::json!({
-        "agent": "ferrited",
+        "agent": "ferralloyd",
         "version": env!("CARGO_PKG_VERSION"),
         "host": gethostname::gethostname().to_string_lossy(),
         "platform": format!("{}/{}", std::env::consts::OS, std::env::consts::ARCH),
@@ -212,7 +212,7 @@ fn deploy_blocking(app: App, body: axum::body::Bytes) -> Response {
     (code, Json(report)).into_response()
 }
 
-/// The accept gate — the heart of Ferrite, shared by the HTTP deploy endpoint
+/// The accept gate — the heart of Ferralloy, shared by the HTTP deploy endpoint
 /// and the fleet-subscription poller. Runs signature → digests → signer policy
 /// → staged behavioral verification, and on full success swaps the pack live
 /// atomically. Returns a report; `error` is `Some` on any rejection and the
@@ -238,13 +238,13 @@ fn accept_pack(app: &App, body: &[u8]) -> DeployReport {
     if let Err(e) = fs::write(&tmp, body) {
         return reject(report, format!("io: {e}"));
     }
-    let pack: LoadedPack = match ferrite_pack::load(&tmp) {
+    let pack: LoadedPack = match ferralloy_pack::load(&tmp) {
         Ok(p) => p,
         Err(e) => return reject(report, format!("load: {e}")),
     };
     report.name = pack.manifest.name.clone();
     report.version = pack.manifest.version.clone();
-    let signer = match ferrite_pack::verify(&pack) {
+    let signer = match ferralloy_pack::verify(&pack) {
         Ok(s) => s,
         Err(e) => return reject(report, format!("static verification failed: {e}")),
     };
@@ -268,7 +268,7 @@ fn accept_pack(app: &App, body: &[u8]) -> DeployReport {
     //    stored, not what you parsed.
     let staged = app.root.join("staging").join(&report.name);
     let _ = fs::remove_dir_all(&staged);
-    if let Err(e) = ferrite_pack::extract(&pack, &staged) {
+    if let Err(e) = ferralloy_pack::extract(&pack, &staged) {
         return reject(report, format!("stage: {e}"));
     }
     let entry_path = staged.join(&pack.manifest.entry);
@@ -276,7 +276,7 @@ fn accept_pack(app: &App, body: &[u8]) -> DeployReport {
         Ok(b) => b,
         Err(e) => return reject(report, format!("staged entry: {e}")),
     };
-    match ferrite_runtime::check_eval(&pack.manifest, &entry) {
+    match ferralloy_runtime::check_eval(&pack.manifest, &entry) {
         Ok(results) if results.is_empty() => {
             report.behavior = "no-vectors".into();
         }
@@ -349,7 +349,7 @@ async fn start(
             Ok(b) => b,
             Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("entry: {e}")).into_response(),
         };
-        let engine = match ferrite_runtime::make_engine() {
+        let engine = match ferralloy_runtime::make_engine() {
             Ok(e) => e,
             Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("engine: {e}")).into_response(),
         };
@@ -363,19 +363,19 @@ async fn start(
     let name2 = name.clone();
     tokio::task::spawn_blocking(move || {
         let kind = manifest.kind;
-        let outcome: Result<Vec<String>, String> = if kind == ferrite_pack::PayloadKind::Model {
+        let outcome: Result<Vec<String>, String> = if kind == ferralloy_pack::PayloadKind::Model {
             // Model pack: run the ferric engine once on this device's fabric.
-            ferrite_runtime::engine_output("ferric", &entry, &body, &manifest.requires)
+            ferralloy_runtime::engine_output("ferric", &entry, &body, &manifest.requires)
                 .map(|(out, _)| {
                     vec![
                         format!("out| ferric fabric: {}", fabric()),
-                        format!("out| output: {} bytes, sha256 {}", out.len(), ferrite_pack::sha256_hex(&out)),
+                        format!("out| output: {} bytes, sha256 {}", out.len(), ferralloy_pack::sha256_hex(&out)),
                     ]
                 })
                 .map_err(|e| e.to_string())
-        } else if kind == ferrite_pack::PayloadKind::Native {
+        } else if kind == ferralloy_pack::PayloadKind::Native {
             // Native pack: run the ELF under the OS sandbox (landlock + rlimits).
-            ferrite_runtime::native::run_native(&entry, &body, &manifest.requires, ferrite_runtime::native::DEFAULT_CPU_SECS)
+            ferralloy_runtime::native::run_native(&entry, &body, &manifest.requires, ferralloy_runtime::native::DEFAULT_CPU_SECS)
                 .map_err(|e| e.to_string())
                 .map(|out| {
                     let mut lines: Vec<String> = vec!["out| native (landlock-confined)".into()];
@@ -385,7 +385,7 @@ async fn start(
                     lines
                 })
         } else {
-            ferrite_runtime::run_wasi_cmd_on(&engine, &entry, &body, &manifest.requires, RUN_FUEL)
+            ferralloy_runtime::run_wasi_cmd_on(&engine, &entry, &body, &manifest.requires, RUN_FUEL)
                 .map_err(|e| e.to_string())
                 .and_then(|out| {
                     let mut lines: Vec<String> = String::from_utf8_lossy(&out.stdout)
@@ -397,7 +397,7 @@ async fn start(
                     // to the bus wire bytes and emit them — the same encode path the
                     // signed eval vectors verified.
                     if let Some(spec) = &manifest.bridge {
-                        let wire = ferrite_runtime::bridge_encode(spec, &out.stdout)
+                        let wire = ferralloy_runtime::bridge_encode(spec, &out.stdout)
                             .map_err(|e| format!("bridge: {e}"))?;
                         let sink = emit_bridge_bytes(&name2, spec, &wire).map_err(|e| format!("bridge sink: {e}"))?;
                         let preview: String = wire.iter().take(24).map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ");
@@ -438,7 +438,7 @@ async fn ops_page() -> axum::response::Html<&'static str> {
 const OPS_HTML: &str = r#"<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ferrited — ops</title>
+<title>ferralloyd — ops</title>
 <style>
   :root { color-scheme: dark; }
   body { font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; background: #0b0e14; color: #cdd6e4; max-width: 72rem; margin: 1.5rem auto; padding: 0 1rem; }
@@ -457,7 +457,7 @@ const OPS_HTML: &str = r#"<!doctype html>
   pre.logs .bridge { color: #8fd3ff; } pre.logs .err { color: #ff9f9f; }
   .empty { color: #7d8aa0; padding: 2rem 0; }
 </style>
-<h1>ferrited <small id="meta">…</small></h1>
+<h1>ferralloyd <small id="meta">…</small></h1>
 <div id="packs"><div class="empty">loading…</div></div>
 <script>
 const $ = (s, r=document) => r.querySelector(s);
@@ -467,7 +467,7 @@ async function refresh() {
   const info = await (await fetch('/v1/info')).json();
   $('#meta').textContent = `${info.host || ''} · ${info.platform} · fabric ${info.fabric} · v${info.version}`;
   const root = $('#packs');
-  if (!info.packs.length) { root.innerHTML = '<div class="empty">no packs deployed — <code>ferrite deploy &lt;pack.fpack&gt; --to this-host:7266</code></div>'; return; }
+  if (!info.packs.length) { root.innerHTML = '<div class="empty">no packs deployed — <code>ferralloy deploy &lt;pack.fpack&gt; --to this-host:7266</code></div>'; return; }
   for (const p of info.packs) {
     let card = $('#pack-' + CSS.escape(p.name));
     if (!card) {
@@ -523,17 +523,17 @@ refresh(); setInterval(refresh, 1500);
 "#;
 
 /// Route bridge wire bytes to the device sink: a real serial port when the
-/// agent was built with `--features serial` AND `FERRITE_BRIDGE_DEV` names a
+/// agent was built with `--features serial` AND `FERRALLOY_BRIDGE_DEV` names a
 /// device (baud from the target registry), else an append-only byte-exact
 /// capture file under the agent root — the same bytes either way, so the
 /// capture path doubles as the hardware-free verification of this stage.
-fn emit_bridge_bytes(pack: &str, spec: &ferrite_pack::BridgeSpec, wire: &[u8]) -> anyhow::Result<String> {
+fn emit_bridge_bytes(pack: &str, spec: &ferralloy_pack::BridgeSpec, wire: &[u8]) -> anyhow::Result<String> {
     use std::io::Write;
     #[cfg(feature = "serial")]
-    if let Ok(dev) = std::env::var("FERRITE_BRIDGE_DEV") {
-        let baud = ferrite_bridge::target(&spec.target)
+    if let Ok(dev) = std::env::var("FERRALLOY_BRIDGE_DEV") {
+        let baud = ferralloy_bridge::target(&spec.target)
             .and_then(|t| t.baud)
-            .or_else(|| ferrite_bridge::codec(&spec.target).and_then(|c| c.baud))
+            .or_else(|| ferralloy_bridge::codec(&spec.target).and_then(|c| c.baud))
             .unwrap_or(115_200);
         let mut port = serialport::new(&dev, baud)
             .timeout(std::time::Duration::from_millis(200))
@@ -565,7 +565,7 @@ async fn stop(State(app): State<App>, AxPath(name): AxPath<String>) -> Response 
     };
     match &p.engine {
         Some(engine) => {
-            ferrite_runtime::interrupt(engine);
+            ferralloy_runtime::interrupt(engine);
             (StatusCode::OK, Json(serde_json::json!({"name": name, "state": "interrupted"}))).into_response()
         }
         None => (StatusCode::OK, Json(serde_json::json!({"name": name, "state": p.run.clone()}))).into_response(),
@@ -640,7 +640,7 @@ fn fleet_tick(
         .body_mut()
         .read_to_vec()
         .map_err(|e| e.to_string())?;
-    if !want_sha.is_empty() && ferrite_pack::sha256_hex(&pack_bytes) != want_sha {
+    if !want_sha.is_empty() && ferralloy_pack::sha256_hex(&pack_bytes) != want_sha {
         return Err("pulled pack sha256 != channel target".into());
     }
     let report = accept_pack(app, &pack_bytes);

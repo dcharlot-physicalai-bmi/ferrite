@@ -1,5 +1,5 @@
 [package]
-name = "ferrite-pack"
+name = "ferralloy-pack"
 description = "The signed, verified-behavior artifact format for physical-AI fleets"
 version.workspace = true
 edition.workspace = true

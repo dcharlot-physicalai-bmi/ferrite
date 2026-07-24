@@ -5,8 +5,8 @@
 //! cross-language: the Rust device must produce byte-for-byte what the
 //! browser-side sim produced.
 
-use ferrite_pack::{BridgeSpec, EvalSpec, EvalVector, FPACK_VERSION, Manifest, PayloadKind, Requires, sha256_hex};
-use ferrite_runtime::{bridge_encode, check_eval, record_eval};
+use ferralloy_pack::{BridgeSpec, EvalSpec, EvalVector, FPACK_VERSION, Manifest, PayloadKind, Requires, sha256_hex};
+use ferralloy_runtime::{bridge_encode, check_eval, record_eval};
 use std::collections::BTreeMap;
 
 /// Pure echo: stdout = stdin, unchanged. The "policy" whose output is the

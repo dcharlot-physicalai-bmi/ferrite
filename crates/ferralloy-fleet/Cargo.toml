@@ -1,17 +1,17 @@
 [package]
-name = "ferrite-fleet"
-description = "ferrite-fleet — the open, self-hostable fleet plane: channels, signed releases, device reports"
+name = "ferralloy-fleet"
+description = "ferralloy-fleet — the open, self-hostable fleet plane: channels, signed releases, device reports"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "ferrite-fleet"
+name = "ferralloy-fleet"
 path = "src/main.rs"
 
 [dependencies]
-ferrite-pack.workspace = true
+ferralloy-pack.workspace = true
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net"] }
 serde.workspace = true

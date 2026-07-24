@@ -931,13 +931,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferrite"
+name = "ferralloy"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "ferrite-pack",
- "ferrite-runtime",
+ "ferralloy-pack",
+ "ferralloy-runtime",
  "hex",
  "mdns-sd",
  "serde_json",
@@ -945,14 +945,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferrite-agent"
+name = "ferralloy-agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "ferrite-bridge",
- "ferrite-pack",
- "ferrite-runtime",
+ "ferralloy-bridge",
+ "ferralloy-pack",
+ "ferralloy-runtime",
  "gethostname",
  "hex",
  "mdns-sd",
@@ -964,16 +964,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferrite-bridge"
+name = "ferralloy-bridge"
 version = "0.1.0"
 
 [[package]]
-name = "ferrite-fleet"
+name = "ferralloy-fleet"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "ferrite-pack",
+ "ferralloy-pack",
  "hex",
  "serde",
  "serde_json",
@@ -981,7 +981,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferrite-pack"
+name = "ferralloy-pack"
 version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
@@ -996,12 +996,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferrite-runtime"
+name = "ferralloy-runtime"
 version = "0.1.0"
 dependencies = [
  "ferric-core",
- "ferrite-bridge",
- "ferrite-pack",
+ "ferralloy-bridge",
+ "ferralloy-pack",
  "hex",
  "landlock",
  "libc",

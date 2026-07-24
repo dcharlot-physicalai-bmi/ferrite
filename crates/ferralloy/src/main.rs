@@ -1,17 +1,17 @@
-//! ferrite — build, sign, verify, and deploy verified-behavior packs.
+//! ferralloy — build, sign, verify, and deploy verified-behavior packs.
 //!
 //! The inner loop this CLI exists for:
-//!   ferrite keygen
-//!   ferrite build ./my-policy --name reach --version 0.1.0 --entry policy.wasm \
+//!   ferralloy keygen
+//!   ferralloy build ./my-policy --name reach --version 0.1.0 --entry policy.wasm \
 //!       --vec-str "obs:0.1,0.2" --vec-str "obs:0.9,0.4" -o reach.fpack
-//!   ferrite discover
-//!   ferrite deploy reach.fpack --to pi4.local:7266
+//!   ferralloy discover
+//!   ferralloy deploy reach.fpack --to pi4.local:7266
 //! The device re-runs the signed eval vectors after apply and refuses the pack
 //! if its *behavior* doesn't match what the author signed — not just its bytes.
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
-use ferrite_pack::{
+use ferralloy_pack::{
     EvalSpec, FPACK_VERSION, KeyPair, Manifest, PayloadKind, Requires,
 };
 use std::collections::BTreeMap;
@@ -19,11 +19,11 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
-const SERVICE_TYPE: &str = "_ferrite._tcp.local.";
+const SERVICE_TYPE: &str = "_ferralloy._tcp.local.";
 pub const DEFAULT_PORT: u16 = 7266; // "F-A-N-N" on a phone pad? no — FE(rrite) on 0x1C62. It's just ours.
 
 #[derive(Parser)]
-#[command(name = "ferrite", version, about = "Signed, verified-behavior packs for physical-AI fleets")]
+#[command(name = "ferralloy", version, about = "Signed, verified-behavior packs for physical-AI fleets")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -31,7 +31,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Generate the author keypair (~/.ferrite/key.hex)
+    /// Generate the author keypair (~/.ferralloy/key.hex)
     Keygen {
         #[arg(long)]
         force: bool,
@@ -77,7 +77,7 @@ enum Cmd {
     Inspect { fpack: PathBuf },
     /// Statically verify a pack, then re-run its eval vectors locally
     Verify { fpack: PathBuf },
-    /// Browse the LAN/tailnet for ferrited agents (mDNS)
+    /// Browse the LAN/tailnet for ferralloyd agents (mDNS)
     Discover {
         #[arg(long, default_value_t = 3)]
         secs: u64,
@@ -169,17 +169,17 @@ fn main() -> Result<()> {
     }
 }
 
-/// `ferrite release` — publish a signed pack to a fleet channel. Verifies it
+/// `ferralloy release` — publish a signed pack to a fleet channel. Verifies it
 /// locally first (fail here, not on the server), then PUTs the bytes.
 fn release(fpack: &PathBuf, channel: &str, fleet: &str) -> Result<()> {
-    let pack = ferrite_pack::load(fpack)?;
-    ferrite_pack::verify(&pack)?;
+    let pack = ferralloy_pack::load(fpack)?;
+    ferralloy_pack::verify(&pack)?;
     let bytes = fs::read(fpack)?;
     let fleet = fleet.trim_end_matches('/');
     println!("releasing {} v{} → {fleet} channel={channel}", pack.manifest.name, pack.manifest.version);
     let mut resp = agent()
         .put(format!("{fleet}/v1/channels/{channel}"))
-        .content_type("application/vnd.ferrite.fpack")
+        .content_type("application/vnd.ferralloy.fpack")
         .send(&bytes[..])?;
     let status = resp.status();
     let body = resp.body_mut().read_to_string()?;
@@ -190,7 +190,7 @@ fn release(fpack: &PathBuf, channel: &str, fleet: &str) -> Result<()> {
     Ok(())
 }
 
-/// `ferrite run` — the sub-5s inner loop. Every phase timed and printed:
+/// `ferralloy run` — the sub-5s inner loop. Every phase timed and printed:
 /// honest numbers or it didn't happen.
 fn run(project: PathBuf, to: &str, input: &str, name: Option<String>) -> Result<()> {
     use std::time::Instant;
@@ -235,12 +235,12 @@ fn run(project: PathBuf, to: &str, input: &str, name: Option<String>) -> Result<
     // Phase 2 — pack: stage the wasm, record the run input as the eval
     // vector, sign.
     let t1 = Instant::now();
-    let stage = std::env::temp_dir().join(format!("ferrite-run-{name}"));
+    let stage = std::env::temp_dir().join(format!("ferralloy-run-{name}"));
     let _ = fs::remove_dir_all(&stage);
     fs::create_dir_all(&stage)?;
     let entry_name = "policy.wasm".to_string();
     fs::copy(&wasm_path, stage.join(&entry_name))?;
-    let fpack = std::env::temp_dir().join(format!("ferrite-run-{name}.fpack"));
+    let fpack = std::env::temp_dir().join(format!("ferralloy-run-{name}.fpack"));
     build(
         stage.clone(),
         name.clone(),
@@ -283,7 +283,7 @@ fn run(project: PathBuf, to: &str, input: &str, name: Option<String>) -> Result<
                 .unwrap_or_default();
         }
         if Instant::now() > deadline {
-            bail!("still running after 60s — use `ferrite logs`/`ferrite stop`");
+            bail!("still running after 60s — use `ferralloy logs`/`ferralloy stop`");
         }
         std::thread::sleep(Duration::from_millis(100));
     };
@@ -304,13 +304,13 @@ fn run(project: PathBuf, to: &str, input: &str, name: Option<String>) -> Result<
 
 fn key_path() -> Result<PathBuf> {
     let home = std::env::home_dir().context("no home directory")?;
-    Ok(home.join(".ferrite").join("key.hex"))
+    Ok(home.join(".ferralloy").join("key.hex"))
 }
 
 fn load_key() -> Result<KeyPair> {
     let path = key_path()?;
     let seed = fs::read_to_string(&path)
-        .with_context(|| format!("no author key at {} — run `ferrite keygen`", path.display()))?;
+        .with_context(|| format!("no author key at {} — run `ferralloy keygen`", path.display()))?;
     Ok(KeyPair::from_seed_hex(&seed)?)
 }
 
@@ -352,7 +352,7 @@ fn build(
 ) -> Result<()> {
     let key = load_key()?;
     let requires = Requires { wasi, caps: cap };
-    let bridge = bridge.map(|target| ferrite_pack::BridgeSpec {
+    let bridge = bridge.map(|target| ferralloy_pack::BridgeSpec {
         target,
         ids: if bridge_ids.is_empty() { None } else { Some(bridge_ids) },
         names: None,
@@ -373,7 +373,7 @@ fn build(
         eprintln!("warning: no --vec-str/--vec-hex given — pack ships WITHOUT behavior vectors");
         None
     } else {
-        let vectors = ferrite_runtime::record_eval(&engine, &entry_bytes, &inputs, &requires, bridge.as_ref())?;
+        let vectors = ferralloy_runtime::record_eval(&engine, &entry_bytes, &inputs, &requires, bridge.as_ref())?;
         for (i, v) in vectors.iter().enumerate() {
             println!("vector {i}: in {}B → out sha256 {}…", inputs[i].len(), &v.output_sha256[..16]);
         }
@@ -396,28 +396,28 @@ fn build(
         bridge,
     };
     let out = out.unwrap_or_else(|| PathBuf::from(format!("{name}-{version}.fpack")));
-    ferrite_pack::build(&payload_dir, manifest, &key, &out)?;
+    ferralloy_pack::build(&payload_dir, manifest, &key, &out)?;
     let bytes = fs::read(&out)?;
     println!("built {} ({} bytes)", out.display(), bytes.len());
-    println!("pack sha256: {}", ferrite_pack::sha256_hex(&bytes));
+    println!("pack sha256: {}", ferralloy_pack::sha256_hex(&bytes));
     println!("signer: {}", key.public_hex());
     Ok(())
 }
 
 fn inspect(fpack: &PathBuf) -> Result<()> {
-    let pack = ferrite_pack::load(fpack)?;
-    let signer = ferrite_pack::verify(&pack)?;
+    let pack = ferralloy_pack::load(fpack)?;
+    let signer = ferralloy_pack::verify(&pack)?;
     println!("{}", String::from_utf8_lossy(&pack.manifest_bytes));
     println!("signature: VALID, signer {signer}");
     Ok(())
 }
 
 fn verify(fpack: &PathBuf) -> Result<()> {
-    let pack = ferrite_pack::load(fpack)?;
-    let signer = ferrite_pack::verify(&pack)?;
+    let pack = ferralloy_pack::load(fpack)?;
+    let signer = ferralloy_pack::verify(&pack)?;
     println!("static: signature + {} file digest(s) OK (signer {}…)", pack.manifest.files.len(), &signer[..16]);
     let entry = &pack.files[&pack.manifest.entry];
-    let results = ferrite_runtime::check_eval(&pack.manifest, entry)?;
+    let results = ferralloy_runtime::check_eval(&pack.manifest, entry)?;
     if results.is_empty() {
         println!("behavior: pack carries no eval vectors");
         return Ok(());
@@ -480,13 +480,13 @@ fn agent() -> ureq::Agent {
 
 fn deploy(fpack: &PathBuf, to: &str) -> Result<()> {
     // Refuse to ship a pack that doesn't verify locally — fail here, not on-device.
-    let pack = ferrite_pack::load(fpack)?;
-    ferrite_pack::verify(&pack)?;
+    let pack = ferralloy_pack::load(fpack)?;
+    ferralloy_pack::verify(&pack)?;
     let bytes = fs::read(fpack)?;
     println!("deploying {} ({} bytes) → {to}", fpack.display(), bytes.len());
     let mut resp = agent()
         .post(format!("http://{to}/v1/packs"))
-        .content_type("application/vnd.ferrite.fpack")
+        .content_type("application/vnd.ferralloy.fpack")
         .send(&bytes[..])?;
     let status = resp.status();
     let body = resp.body_mut().read_to_string()?;

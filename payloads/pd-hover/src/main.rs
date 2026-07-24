@@ -1,4 +1,4 @@
-//! pd-hover — demo Ferrite pack payload: a PD hover controller for a 1-D
+//! pd-hover — demo Ferralloy pack payload: a PD hover controller for a 1-D
 //! thrust-controlled point mass. Reads "y0,v0,target" from stdin, closes the
 //! loop for 200 steps at dt=0.02 s, prints the command trajectory and the
 //! final state. Pure f64 math: WebAssembly floats are deterministic by spec,

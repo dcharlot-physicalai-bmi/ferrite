@@ -48,12 +48,12 @@ pub struct EvalSpec {
 
 /// Optional sim-to-real output stage. When present, the payload's stdout is a
 /// JSON array of normalized actuator targets (each 0..1) and the host encodes
-/// it with the named ferrite-bridge target's wire codec — so the *behavior*
+/// it with the named ferralloy-bridge target's wire codec — so the *behavior*
 /// the eval vectors digest (and the author signs) is the **exact bytes that
 /// reach the motor bus**, not just the policy's text output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BridgeSpec {
-    /// ferrite-bridge target id ("feetech", "dynamixel", "arduino", …) or a
+    /// ferralloy-bridge target id ("feetech", "dynamixel", "arduino", …) or a
     /// bare codec id ("feetech-scs", "pwm-text", …).
     pub target: String,
     /// Bus servo IDs (feetech / dynamixel). Default: 1..=N.
