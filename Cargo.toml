@@ -24,18 +24,10 @@ anyhow = "1"
 lto = "thin"
 strip = true
 
-# The ferric engine's determinism guarantee lives partly in Ferric's wgpu/naga
-# forks (MTLMathModeSafe + FP_CONTRACT OFF on Metal, NoContraction SPIR-V on
-# Vulkan). Patch tables only apply from the build's workspace root, so ferralloy
-# must mirror ferric's fork patches — otherwise packs verify against STOCK
-# fast-math wgpu and cross-fabric bit-identity silently breaks.
-[patch.crates-io]
-wgpu = { path = "../ferric/forks/wgpu" }
-wgpu-core = { path = "../ferric/forks/wgpu-core" }
-wgpu-hal = { path = "../ferric/forks/wgpu-hal" }
-wgpu-types = { path = "../ferric/forks/wgpu-types" }
-wgpu-naga-bridge = { path = "../ferric/forks/wgpu-naga-bridge" }
-wgpu-core-deps-apple = { path = "../ferric/forks/wgpu-core-deps-apple" }
-wgpu-core-deps-emscripten = { path = "../ferric/forks/wgpu-core-deps-emscripten" }
-wgpu-core-deps-windows-linux-android = { path = "../ferric/forks/wgpu-core-deps-windows-linux-android" }
-naga = { path = "../ferric/forks/naga" }
+# No wgpu/naga fork patches — and this is the point. The ferric engine's
+# cross-fabric bit-identity was proven (2026-07-24) to come entirely from the
+# WGSL storage-pinning in ferric-core's kernels, NOT from compiler patches: on
+# STOCK wgpu 30, Metal and Vulkan produce byte-identical digests (see
+# ferric/docs/determinism/). So Ferralloy builds against the published
+# ferric-core (v0.2, stock wgpu) with no forks — local and crates.io builds are
+# identical, and `cargo install ferralloy` is deterministic out of the box.

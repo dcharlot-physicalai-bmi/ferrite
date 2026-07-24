@@ -12,8 +12,8 @@ path = "src/main.rs"
 
 [dependencies]
 ferralloy-pack.workspace = true
-ferralloy-runtime = { path = "../ferralloy-runtime", features = ["ferric", "native"] }
-ferralloy-bridge = { path = "../ferralloy-bridge" }
+ferralloy-runtime = { path = "../ferralloy-runtime", version = "0.1", features = ["ferric", "native"] }
+ferralloy-bridge = { path = "../ferralloy-bridge", version = "0.1" }
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net"] }
 mdns-sd = "0.20"

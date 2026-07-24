@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 ferralloy-pack.workspace = true
-ferralloy-runtime = { path = "../ferralloy-runtime", features = ["ferric", "native"] }
+ferralloy-runtime = { path = "../ferralloy-runtime", version = "0.1", features = ["ferric", "native"] }
 clap = { version = "4", features = ["derive"] }
 ureq = "3"
 mdns-sd = "0.20"

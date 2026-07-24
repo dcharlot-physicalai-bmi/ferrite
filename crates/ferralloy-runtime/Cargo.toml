@@ -16,7 +16,7 @@ thiserror.workspace = true
 serde_json.workspace = true
 tempfile = "3"
 # engine "ferric" — GPU-fabric model verification (sibling checkout of ferric)
-ferric-core = { path = "../../../ferric/crates/ferric-core", optional = true }
+ferric-core = { version = "0.2", optional = true }
 pollster = { version = "1", optional = true }
 serde = { workspace = true, optional = true }
 
